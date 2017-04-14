@@ -1,4 +1,5 @@
 use std::io::{self, Write, Error};
+use std::str::FromStr;
 
 extern crate regex;
 
@@ -7,11 +8,14 @@ enum Line {
     Lval(Lval),
 }
 
+#[derive(PartialEq, Debug)]
 enum Lval {
     Number(i32),
+    Float(f64),
     Atom(String),
     String(String),
 }
+
 
 fn read() -> Result<Line, Error> {
     let mut input = String::new();
@@ -27,16 +31,39 @@ fn read() -> Result<Line, Error> {
 }
 
 fn parse(s: &str) -> Lval {
-    let re = regex::Regex::new(r#""(\w*)""#).unwrap();
-    if re.is_match(s) {
+    let set = regex::RegexSet::new(&[r#""(\w*)""#, r"\d+\.\d+", r"\d+"]).unwrap();
+    let matches = set.matches(s);
+
+    if matches.matched(0) {
+        let re = regex::Regex::new(r#""(\w*)""#).unwrap();
         let cap = re.captures(s).unwrap();
         Lval::String(cap[1].into())
+    } else if matches.matched(1) {
+        Lval::Float(f64::from_str(s).unwrap())
+    } else if matches.matched(2) {
+        Lval::Number(i32::from_str_radix(s, 10).unwrap())
     } else {
-        match i32::from_str_radix(s, 10) {
-            Ok(i) => Lval::Number(i),
-            _ => Lval::Atom(s.into()),
-        }
+        Lval::Atom(s.into())
     }
+}
+#[test]
+fn it_parses_atoms() {
+    assert_eq!(Lval::Atom("val".into()), parse("val"))
+}
+
+#[test]
+fn it_parses_strings() {
+    assert_eq!(Lval::String("string".into()), parse("\"string\""))
+}
+
+#[test]
+fn it_parses_numbers() {
+    assert_eq!(Lval::Number(42), parse("42"))
+}
+
+#[test]
+fn it_parses_floats() {
+    assert_eq!(Lval::Float(42.1), parse("42.1"))
 }
 
 fn eval(l: &Lval) -> String {
@@ -44,8 +71,29 @@ fn eval(l: &Lval) -> String {
         Lval::Atom(ref s) => format!("atom: {}", s),
         Lval::String(ref s) => format!("string: \"{}\"", s),
         Lval::Number(i) => format!("number: {}", i),
+        Lval::Float(f) => format!("float: {}", f),
     }
 
+}
+
+#[test]
+fn it_evals_atoms() {
+    assert_eq!("atom: val", eval(&Lval::Atom("val".into())))
+}
+
+#[test]
+fn it_evals_strings() {
+    assert_eq!("string: \"foo\"", eval(&Lval::String("foo".into())))
+}
+
+#[test]
+fn it_evals_numbers() {
+    assert_eq!("number: 42", eval(&Lval::Number(42)))
+}
+
+#[test]
+fn it_evals_floats() {
+    assert_eq!("float: 42.1", eval(&Lval::Float(42.1)))
 }
 
 fn print(s: &str) {
