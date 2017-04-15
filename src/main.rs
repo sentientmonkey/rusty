@@ -3,29 +3,22 @@ use std::str::FromStr;
 
 extern crate regex;
 
-enum Line {
-    Quit,
-    Lval(Lval),
-}
-
 #[derive(PartialEq, Debug)]
 enum Lval {
     Number(i32),
     Float(f64),
-    Atom(String),
+    Symbol(String),
     String(String),
 }
 
-
-fn read() -> Result<Line, Error> {
+fn read() -> Result<Lval, Error> {
     let mut input = String::new();
     print!("> ");
     io::stdout().flush().unwrap();
 
     match io::stdin().read_line(&mut input) {
-        Ok(0) => Ok(Line::Quit),
-        Ok(_) if input.trim() == "quit" => Ok(Line::Quit),
-        Ok(_) => Ok(Line::Lval(parse(input.trim()))),
+        Ok(0) => Ok(Lval::Symbol("quit".into())),
+        Ok(_) => Ok(parse(input.trim())),
         Err(e) => Err(e),
     }
 }
@@ -43,12 +36,12 @@ fn parse(s: &str) -> Lval {
     } else if matches.matched(2) {
         Lval::Number(i32::from_str_radix(s, 10).unwrap())
     } else {
-        Lval::Atom(s.into())
+        Lval::Symbol(s.into())
     }
 }
 #[test]
 fn it_parses_atoms() {
-    assert_eq!(Lval::Atom("val".into()), parse("val"))
+    assert_eq!(Lval::Symbol("val".into()), parse("val"))
 }
 
 #[test]
@@ -68,7 +61,7 @@ fn it_parses_floats() {
 
 fn eval(l: &Lval) -> String {
     match *l {
-        Lval::Atom(ref s) => format!("atom: {}", s),
+        Lval::Symbol(ref s) => format!("atom: {}", s),
         Lval::String(ref s) => format!("string: \"{}\"", s),
         Lval::Number(i) => format!("number: {}", i),
         Lval::Float(f) => format!("float: {}", f),
@@ -78,7 +71,7 @@ fn eval(l: &Lval) -> String {
 
 #[test]
 fn it_evals_atoms() {
-    assert_eq!("atom: val", eval(&Lval::Atom("val".into())))
+    assert_eq!("atom: val", eval(&Lval::Symbol("val".into())))
 }
 
 #[test]
@@ -105,11 +98,13 @@ fn main() {
 
     loop {
         match read() {
-            Ok(Line::Quit) => {
-                println!("Bye!");
-                break;
+            Ok(l) => {
+                if l == Lval::Symbol("quit".into()) {
+                    println!("Bye!");
+                    break;
+                }
+                print(&eval(&l))
             }
-            Ok(Line::Lval(l)) => print(&eval(&l)),
             Err(e) => println!("Error: {}", e),
         }
     }
