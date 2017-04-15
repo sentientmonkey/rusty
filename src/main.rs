@@ -9,6 +9,7 @@ enum Lval {
     Float(f64),
     Symbol(String),
     String(String),
+    Sexp(Lval),
 }
 
 fn read() -> Result<Lval, Error> {
@@ -24,7 +25,7 @@ fn read() -> Result<Lval, Error> {
 }
 
 fn parse(s: &str) -> Lval {
-    let set = regex::RegexSet::new(&[r#""(\w*)""#, r"\d+\.\d+", r"\d+"]).unwrap();
+    let set = regex::RegexSet::new(&[r#""(\w*)""#, r"\d+\.\d+", r"\d+", r"\(.*\)"]).unwrap();
     let matches = set.matches(s);
 
     if matches.matched(0) {
@@ -35,6 +36,10 @@ fn parse(s: &str) -> Lval {
         Lval::Float(f64::from_str(s).unwrap())
     } else if matches.matched(2) {
         Lval::Number(i32::from_str_radix(s, 10).unwrap())
+    } else if matches.matched(3) {
+        let re = regex::Regex::new(r"\((.*)\)").unwrap();
+        let cap = re.captures(s).unwrap();
+        Lval::Sexp(parse(cap[1].into()))
     } else {
         Lval::Symbol(s.into())
     }
@@ -61,6 +66,7 @@ fn it_parses_floats() {
 
 fn eval(l: &Lval) -> String {
     match *l {
+        Lval::Sexp(ref s) => format!("sexp: {}", s),
         Lval::Symbol(ref s) => format!("atom: {}", s),
         Lval::String(ref s) => format!("string: \"{}\"", s),
         Lval::Number(i) => format!("number: {}", i),
