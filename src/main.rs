@@ -9,7 +9,7 @@ enum Lval {
     Float(f64),
     Symbol(String),
     String(String),
-    Sexp(Lval),
+    Sexp(String),
 }
 
 fn read() -> Result<Lval, Error> {
@@ -25,25 +25,26 @@ fn read() -> Result<Lval, Error> {
 }
 
 fn parse(s: &str) -> Lval {
-    let set = regex::RegexSet::new(&[r#""(\w*)""#, r"\d+\.\d+", r"\d+", r"\(.*\)"]).unwrap();
+    let set = regex::RegexSet::new(&[r"\(.*\)", r#""(\w*)""#, r"\d+\.\d+", r"\d+"]).unwrap();
     let matches = set.matches(s);
 
     if matches.matched(0) {
+        let re = regex::Regex::new(r"\((.*)\)").unwrap();
+        let cap = re.captures(s).unwrap();
+        Lval::Sexp(cap[1].into())
+    } else if matches.matched(1) {
         let re = regex::Regex::new(r#""(\w*)""#).unwrap();
         let cap = re.captures(s).unwrap();
         Lval::String(cap[1].into())
-    } else if matches.matched(1) {
-        Lval::Float(f64::from_str(s).unwrap())
     } else if matches.matched(2) {
-        Lval::Number(i32::from_str_radix(s, 10).unwrap())
+        Lval::Float(f64::from_str(s).unwrap())
     } else if matches.matched(3) {
-        let re = regex::Regex::new(r"\((.*)\)").unwrap();
-        let cap = re.captures(s).unwrap();
-        Lval::Sexp(parse(cap[1].into()))
+        Lval::Number(i32::from_str_radix(s, 10).unwrap())
     } else {
         Lval::Symbol(s.into())
     }
 }
+
 #[test]
 fn it_parses_atoms() {
     assert_eq!(Lval::Symbol("val".into()), parse("val"))
@@ -63,6 +64,14 @@ fn it_parses_numbers() {
 fn it_parses_floats() {
     assert_eq!(Lval::Float(42.1), parse("42.1"))
 }
+
+#[test]
+fn it_parses_sexps() {
+    assert_eq!(Lval::Sexp("+ 1 2".into()), parse("(+ 1 2)"));
+    assert_eq!(Lval::Sexp("println \"foo\"".into()),
+               parse("(println \"foo\")"));
+}
+
 
 fn eval(l: &Lval) -> String {
     match *l {
