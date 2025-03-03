@@ -1,4 +1,4 @@
-use std::io::{self, Write, Error};
+use std::io::{self, Error, Write};
 use std::str::FromStr;
 
 extern crate regex;
@@ -68,10 +68,11 @@ fn it_parses_floats() {
 #[test]
 fn it_parses_sexps() {
     assert_eq!(Lval::Sexp("+ 1 2".into()), parse("(+ 1 2)"));
-    assert_eq!(Lval::Sexp("println \"foo\"".into()),
-               parse("(println \"foo\")"));
+    assert_eq!(
+        Lval::Sexp("println \"foo\"".into()),
+        parse("(println \"foo\")")
+    );
 }
-
 
 fn eval(l: &Lval) -> String {
     match *l {
@@ -81,7 +82,6 @@ fn eval(l: &Lval) -> String {
         Lval::Number(i) => format!("number: {}", i),
         Lval::Float(f) => format!("float: {}", f),
     }
-
 }
 
 #[test]
