@@ -33,7 +33,7 @@ fn parse(s: &str) -> Lval {
     if matches.matched(0) {
         let re = regex::Regex::new(r"\((.*)\)").unwrap();
         let cap = re.captures(s).unwrap();
-        let vec: Vec<Lval> = cap[1].split(" ").map(|s| self::parse(s)).collect();
+        let vec: Vec<Lval> = cap[1].split(" ").map(self::parse).collect();
         Lval::Sexp(vec)
     } else if matches.matched(1) {
         let re = regex::Regex::new(r#""(\w*)""#).unwrap();
@@ -90,12 +90,8 @@ fn it_parses_sexps() {
 impl fmt::Display for Lval {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Lval::Sexp(ref lst) => {
-                let res = lst
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" ");
+            Lval::Sexp(ref v) => {
+                let res = v.iter().map(&Lval::to_string).collect::<Vec<_>>().join(" ");
                 write!(f, "({})", res)
             }
             Lval::Symbol(ref s) => write!(f, "{}", s),
