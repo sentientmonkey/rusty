@@ -1,5 +1,7 @@
+use std::fmt;
 use std::io::{self, Error, Write};
 use std::str::FromStr;
+use std::vec::Vec;
 
 extern crate regex;
 
@@ -9,7 +11,7 @@ enum Lval {
     Float(f64),
     Symbol(String),
     String(String),
-    Sexp(String),
+    Sexp(Vec<Lval>),
 }
 
 fn read() -> Result<Lval, Error> {
@@ -31,7 +33,8 @@ fn parse(s: &str) -> Lval {
     if matches.matched(0) {
         let re = regex::Regex::new(r"\((.*)\)").unwrap();
         let cap = re.captures(s).unwrap();
-        Lval::Sexp(cap[1].into())
+        let vec: Vec<Lval> = cap[1].split(" ").map(|s| self::parse(s)).collect();
+        Lval::Sexp(vec)
     } else if matches.matched(1) {
         let re = regex::Regex::new(r#""(\w*)""#).unwrap();
         let cap = re.captures(s).unwrap();
@@ -67,41 +70,83 @@ fn it_parses_floats() {
 
 #[test]
 fn it_parses_sexps() {
-    assert_eq!(Lval::Sexp("+ 1 2".into()), parse("(+ 1 2)"));
     assert_eq!(
-        Lval::Sexp("println \"foo\"".into()),
+        Lval::Sexp(vec![
+            Lval::Symbol("+".into()),
+            Lval::Number(1),
+            Lval::Number(2)
+        ]),
+        parse("(+ 1 2)")
+    );
+    assert_eq!(
+        Lval::Sexp(vec![
+            Lval::Symbol("println".into()),
+            Lval::String("foo".into())
+        ]),
         parse("(println \"foo\")")
     );
 }
 
-fn eval(l: &Lval) -> String {
-    match *l {
-        Lval::Sexp(ref s) => format!("sexp: {}", s),
-        Lval::Symbol(ref s) => format!("atom: {}", s),
-        Lval::String(ref s) => format!("string: \"{}\"", s),
-        Lval::Number(i) => format!("number: {}", i),
-        Lval::Float(f) => format!("float: {}", f),
+impl fmt::Display for Lval {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Lval::Sexp(ref lst) => {
+                let res = lst
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" ");
+                write!(f, "({})", res)
+            }
+            Lval::Symbol(ref s) => write!(f, "{}", s),
+            Lval::String(ref s) => write!(f, "\"{}\"", s),
+            Lval::Number(i) => write!(f, "{}", i),
+            Lval::Float(n) => write!(f, "{}", n),
+        }
     }
+}
+
+fn eval(l: &Lval) -> String {
+    format!("{}", l)
 }
 
 #[test]
 fn it_evals_atoms() {
-    assert_eq!("atom: val", eval(&Lval::Symbol("val".into())))
+    assert_eq!("val", eval(&Lval::Symbol("val".into())))
 }
 
 #[test]
 fn it_evals_strings() {
-    assert_eq!("string: \"foo\"", eval(&Lval::String("foo".into())))
+    assert_eq!("\"foo\"", eval(&Lval::String("foo".into())))
 }
 
 #[test]
 fn it_evals_numbers() {
-    assert_eq!("number: 42", eval(&Lval::Number(42)))
+    assert_eq!("42", eval(&Lval::Number(42)))
 }
 
 #[test]
 fn it_evals_floats() {
-    assert_eq!("float: 42.1", eval(&Lval::Float(42.1)))
+    assert_eq!("42.1", eval(&Lval::Float(42.1)))
+}
+
+#[test]
+fn it_evals_expressions() {
+    assert_eq!(
+        "(+ 1 2)",
+        eval(&Lval::Sexp(vec![
+            Lval::Symbol("+".into()),
+            Lval::Number(1),
+            Lval::Number(2),
+        ]))
+    );
+    assert_eq!(
+        "(println \"foo\")",
+        eval(&Lval::Sexp(vec![
+            Lval::Symbol("println".into()),
+            Lval::String("foo".into()),
+        ]))
+    )
 }
 
 fn print(s: &str) {
