@@ -5,7 +5,7 @@ use std::vec::Vec;
 
 extern crate regex;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 enum Lval {
     Number(i32),
     Float(f64),
@@ -102,51 +102,52 @@ impl fmt::Display for Lval {
     }
 }
 
-fn eval(l: &Lval) -> String {
-    format!("{}", l)
+fn eval(l: &Lval) -> Lval {
+    l.clone()
+}
+
+#[cfg(test)]
+fn assert_eval(result: &str, val: &Lval) {
+    assert_eq!(result, eval(val).to_string())
 }
 
 #[test]
 fn it_evals_atoms() {
-    assert_eq!("val", eval(&Lval::Symbol("val".into())))
+    assert_eval("val", &Lval::Symbol("val".into()))
 }
 
 #[test]
 fn it_evals_strings() {
-    assert_eq!("\"foo\"", eval(&Lval::String("foo".into())))
+    assert_eval("\"foo\"", &Lval::String("foo".into()))
 }
 
 #[test]
 fn it_evals_numbers() {
-    assert_eq!("42", eval(&Lval::Number(42)))
+    assert_eval("42", &Lval::Number(42))
 }
 
 #[test]
 fn it_evals_floats() {
-    assert_eq!("42.1", eval(&Lval::Float(42.1)))
+    assert_eval("42.1", &Lval::Float(42.1))
 }
 
 #[test]
 fn it_evals_expressions() {
-    assert_eq!(
+    assert_eval(
         "(+ 1 2)",
-        eval(&Lval::Sexp(vec![
+        &Lval::Sexp(vec![
             Lval::Symbol("+".into()),
             Lval::Number(1),
             Lval::Number(2),
-        ]))
+        ]),
     );
-    assert_eq!(
+    assert_eval(
         "(println \"foo\")",
-        eval(&Lval::Sexp(vec![
+        &Lval::Sexp(vec![
             Lval::Symbol("println".into()),
             Lval::String("foo".into()),
-        ]))
+        ]),
     )
-}
-
-fn print(s: &str) {
-    println!("{}", s)
 }
 
 fn main() {
@@ -159,7 +160,7 @@ fn main() {
                     println!("Bye!");
                     break;
                 }
-                print(&eval(&l))
+                println!("{}", eval(&l))
             }
             Err(e) => println!("Error: {}", e),
         }
