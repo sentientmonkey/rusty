@@ -22,24 +22,31 @@ fn read() -> Result<Lval, Error> {
 
     match io::stdin().read_line(&mut input) {
         Ok(0) => Ok(Lval::Symbol("quit".into())),
-        Ok(_) => Ok(parse(input.trim())),
+        Ok(_) => parse(input.trim()),
         Err(e) => Err(e),
     }
 }
 
-fn parse(s: &str) -> Lval {
+fn parse(s: &str) -> Result<Lval, Error> {
     let mut scanner = Scanner::new(s);
     scanner.skip_while(char::is_whitespace);
     let (_, c) = scanner.peek_nth(0).unwrap();
-    if is_quote(c) {
+    let r = if is_quote(c) {
         parse_string(&mut scanner)
     } else if is_number(c) {
         parse_number(&mut scanner)
     } else if c.is_alphabetic() {
         parse_symbol(&mut scanner)
     } else {
-        panic!("nope")
+        panic!("not implemented")
+    };
+
+    scanner.skip_while(char::is_whitespace);
+    if scanner.has_remaining_text() {
+        panic!("has more text");
     }
+
+    r
 
     /*
     let set = regex::RegexSet::new(&[r"\(.*\)", r#""(\w*)""#, r"\d+\.\d+", r"\d+"]).unwrap();
@@ -87,10 +94,10 @@ fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
     Ok(())
 }
 
-fn parse_string(scanner: &mut Scanner) -> Lval {
+fn parse_string(scanner: &mut Scanner) -> Result<Lval, Error> {
     let (_, _) = scanner.accept_if(is_quote).unwrap();
     let (_, s) = scanner.scan_with(scan_string).unwrap();
-    Lval::String(String::from(s))
+    Ok(Lval::String(String::from(s)))
 }
 
 fn scan_float<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
@@ -108,12 +115,12 @@ fn scan_number<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
     Ok(())
 }
 
-fn parse_number(scanner: &mut Scanner) -> Lval {
+fn parse_number(scanner: &mut Scanner) -> Result<Lval, Error> {
     if let Ok((_, s)) = scanner.scan_with(scan_float) {
-        Lval::Float(s.parse().unwrap())
+        Ok(Lval::Float(s.parse().unwrap()))
     } else {
         let (_, s) = scanner.scan_with(scan_number).unwrap();
-        Lval::Number(i32::from_str_radix(s, 10).unwrap())
+        Ok(Lval::Number(i32::from_str_radix(s, 10).unwrap()))
     }
 }
 
@@ -123,53 +130,58 @@ fn scan_symbol<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
     Ok(())
 }
 
-fn parse_symbol(scanner: &mut Scanner) -> Lval {
+fn parse_symbol(scanner: &mut Scanner) -> Result<Lval, Error> {
     let (_, s) = scanner.scan_with(scan_symbol).unwrap();
-    Lval::Symbol(String::from(s))
+    Ok(Lval::Symbol(String::from(s)))
+}
+
+#[cfg(test)]
+fn assert_parse(exp: &Lval, s: &str) {
+    assert_eq!(exp, &parse(s).unwrap())
 }
 
 #[test]
 fn it_parses_atoms() {
-    assert_eq!(Lval::Symbol("val".into()), parse("val"))
+    assert_parse(&Lval::Symbol("val".into()), "val")
 }
 
 #[test]
 fn it_parses_strings() {
-    assert_eq!(Lval::String("string".into()), parse("\"string\""))
+    assert_parse(&Lval::String("string".into()), "\"string\"")
 }
 
 #[test]
 fn it_parses_numbers() {
-    assert_eq!(Lval::Number(42), parse("42"))
+    assert_parse(&Lval::Number(42), "42")
 }
 
 #[test]
 fn it_parses_floats() {
-    assert_eq!(Lval::Float(42.1), parse("42.1"))
+    assert_parse(&Lval::Float(42.1), "42.1")
 }
 
 #[test]
 fn it_parses_sexps() {
-    assert_eq!(
-        Lval::Sexp(vec![
+    assert_parse(
+        &Lval::Sexp(vec![
             Lval::Symbol("+".into()),
             Lval::Number(1),
-            Lval::Number(2)
+            Lval::Number(2),
         ]),
-        parse("(+ 1 2)")
+        "(+ 1 2)",
     );
-    assert_eq!(
-        Lval::Sexp(vec![
+    assert_parse(
+        &Lval::Sexp(vec![
             Lval::Symbol("println".into()),
-            Lval::String("foo".into())
+            Lval::String("foo".into()),
         ]),
-        parse("(println \"foo\")")
+        "(println \"foo\")",
     );
 }
 #[test]
 fn it_parsers_recusively() {
-    assert_eq!(
-        Lval::Sexp(vec![
+    assert_parse(
+        &Lval::Sexp(vec![
             Lval::Symbol("+".into()),
             Lval::Number(1),
             Lval::Sexp(vec![
@@ -178,7 +190,7 @@ fn it_parsers_recusively() {
                 Lval::Number(1),
             ]),
         ]),
-        parse("(+ 1 (- 2 1))")
+        "(+ 1 (- 2 1))",
     );
 }
 
