@@ -1,9 +1,10 @@
 use std::fmt;
 use std::io::{self, Error, Write};
-use std::str::FromStr;
 use std::vec::Vec;
+use text_scanner::{Scanner, ScannerItem};
 
 extern crate regex;
+extern crate text_scanner;
 
 #[derive(PartialEq, Clone, Debug)]
 enum Lval {
@@ -27,6 +28,20 @@ fn read() -> Result<Lval, Error> {
 }
 
 fn parse(s: &str) -> Lval {
+    let mut scanner = Scanner::new(s);
+    scanner.skip_while(char::is_whitespace);
+    let (_, c) = scanner.peek_nth(0).unwrap();
+    if is_quote(c) {
+        parse_string(&mut scanner)
+    } else if is_number(c) {
+        parse_number(&mut scanner)
+    } else if c.is_alphabetic() {
+        parse_symbol(&mut scanner)
+    } else {
+        panic!("nope")
+    }
+
+    /*
     let set = regex::RegexSet::new(&[r"\(.*\)", r#""(\w*)""#, r"\d+\.\d+", r"\d+"]).unwrap();
     let matches = set.matches(s);
 
@@ -46,6 +61,71 @@ fn parse(s: &str) -> Lval {
     } else {
         Lval::Symbol(s.into())
     }
+    */
+}
+
+fn is_quote(c: char) -> bool {
+    c == '"'
+}
+
+fn is_not_quote(c: char) -> bool {
+    c != '"'
+}
+
+fn is_number(c: char) -> bool {
+    c.is_digit(10)
+}
+
+fn is_period(c: char) -> bool {
+    c == '.'
+}
+
+fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
+    // Get next char unless it's a quote
+    let (_, _c) = scanner.accept_if(is_not_quote)?;
+    let (_, _s) = scanner.skip_while(is_not_quote);
+    Ok(())
+}
+
+fn parse_string(scanner: &mut Scanner) -> Lval {
+    let (_, _) = scanner.accept_if(is_quote).unwrap();
+    let (_, s) = scanner.scan_with(scan_string).unwrap();
+    Lval::String(String::from(s))
+}
+
+fn scan_float<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
+    let (_, _c) = scanner.accept_if(is_number)?;
+    let (_, _s) = scanner.skip_while(is_number);
+    let (_, _c) = scanner.accept_if(is_period)?;
+    let (_, _c) = scanner.accept_if(is_number)?;
+    let (_, _s) = scanner.skip_while(is_number);
+    Ok(())
+}
+
+fn scan_number<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
+    let (_, _c) = scanner.accept_if(is_number)?;
+    let (_, _s) = scanner.skip_while(is_number);
+    Ok(())
+}
+
+fn parse_number(scanner: &mut Scanner) -> Lval {
+    if let Ok((_, s)) = scanner.scan_with(scan_float) {
+        Lval::Float(s.parse().unwrap())
+    } else {
+        let (_, s) = scanner.scan_with(scan_number).unwrap();
+        Lval::Number(i32::from_str_radix(s, 10).unwrap())
+    }
+}
+
+fn scan_symbol<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
+    let (_, _c) = scanner.accept_if(char::is_alphabetic)?;
+    let (_, _s) = scanner.skip_while(char::is_alphanumeric);
+    Ok(())
+}
+
+fn parse_symbol(scanner: &mut Scanner) -> Lval {
+    let (_, s) = scanner.scan_with(scan_symbol).unwrap();
+    Lval::Symbol(String::from(s))
 }
 
 #[test]
@@ -84,6 +164,21 @@ fn it_parses_sexps() {
             Lval::String("foo".into())
         ]),
         parse("(println \"foo\")")
+    );
+}
+#[test]
+fn it_parsers_recusively() {
+    assert_eq!(
+        Lval::Sexp(vec![
+            Lval::Symbol("+".into()),
+            Lval::Number(1),
+            Lval::Sexp(vec![
+                Lval::Symbol("-".into()),
+                Lval::Number(2),
+                Lval::Number(1),
+            ]),
+        ]),
+        parse("(+ 1 (- 2 1))")
     );
 }
 

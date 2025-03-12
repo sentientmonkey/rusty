@@ -5,3 +5,4 @@ authors = ["Scott Windsor <swindsor@gmail.com>"]
 
 [dependencies]
 regex = "0.2"
+text-scanner = "0.0.3"

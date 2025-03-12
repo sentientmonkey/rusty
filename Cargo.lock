@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "char-ranges"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21eb25e26d7f0447e5334df6cd8800bb1b97512dc0b7af6867123ffe76cfebe6"
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -50,6 +56,16 @@ name = "rusty"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "text-scanner",
+]
+
+[[package]]
+name = "text-scanner"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0380b67b25e7b41348147847e3ef939afd05a60fa8b1ef2fccd1fde6ca7ec340"
+dependencies = [
+ "char-ranges",
 ]
 
 [[package]]
