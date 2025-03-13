@@ -29,46 +29,32 @@ fn read() -> Result<Lval, Error> {
 
 fn parse(s: &str) -> Result<Lval, Error> {
     let mut scanner = Scanner::new(s);
-    scanner.skip_while(char::is_whitespace);
-    let (_, c) = scanner.peek_nth(0).unwrap();
-    let r = if is_quote(c) {
-        parse_string(&mut scanner)
-    } else if is_number(c) {
-        parse_number(&mut scanner)
-    } else if c.is_alphabetic() {
-        parse_symbol(&mut scanner)
-    } else {
-        panic!("not implemented")
-    };
 
-    scanner.skip_while(char::is_whitespace);
+    let r = parse_internal(&mut scanner);
+
     if scanner.has_remaining_text() {
-        panic!("has more text");
+        panic!("has more text")
     }
 
     r
+}
 
-    /*
-    let set = regex::RegexSet::new(&[r"\(.*\)", r#""(\w*)""#, r"\d+\.\d+", r"\d+"]).unwrap();
-    let matches = set.matches(s);
-
-    if matches.matched(0) {
-        let re = regex::Regex::new(r"\((.*)\)").unwrap();
-        let cap = re.captures(s).unwrap();
-        let vec: Vec<Lval> = cap[1].split(" ").map(self::parse).collect();
-        Lval::Sexp(vec)
-    } else if matches.matched(1) {
-        let re = regex::Regex::new(r#""(\w*)""#).unwrap();
-        let cap = re.captures(s).unwrap();
-        Lval::String(cap[1].into())
-    } else if matches.matched(2) {
-        Lval::Float(f64::from_str(s).unwrap())
-    } else if matches.matched(3) {
-        Lval::Number(i32::from_str_radix(s, 10).unwrap())
+fn parse_internal(scanner: &mut Scanner) -> Result<Lval, Error> {
+    scanner.skip_while(char::is_whitespace);
+    let (_, c) = scanner.peek_nth(0).unwrap();
+    let r = if is_quote(c) {
+        parse_string(scanner)
+    } else if is_open_paren(c) {
+        parse_sexp(scanner)
+    } else if is_number(c) {
+        parse_number(scanner)
     } else {
-        Lval::Symbol(s.into())
-    }
-    */
+        parse_symbol(scanner)
+    };
+
+    scanner.skip_while(char::is_whitespace);
+
+    r
 }
 
 fn is_quote(c: char) -> bool {
@@ -87,6 +73,14 @@ fn is_period(c: char) -> bool {
     c == '.'
 }
 
+fn is_open_paren(c: char) -> bool {
+    c == '('
+}
+
+fn is_closed_paren(c: char) -> bool {
+    c == ')'
+}
+
 fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
     // Get next char unless it's a quote
     let (_, _c) = scanner.accept_if(is_not_quote)?;
@@ -97,6 +91,7 @@ fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
 fn parse_string(scanner: &mut Scanner) -> Result<Lval, Error> {
     let (_, _) = scanner.accept_if(is_quote).unwrap();
     let (_, s) = scanner.scan_with(scan_string).unwrap();
+    let (_, _) = scanner.accept_if(is_quote).unwrap();
     Ok(Lval::String(String::from(s)))
 }
 
@@ -125,14 +120,31 @@ fn parse_number(scanner: &mut Scanner) -> Result<Lval, Error> {
 }
 
 fn scan_symbol<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'text str>> {
-    let (_, _c) = scanner.accept_if(char::is_alphabetic)?;
-    let (_, _s) = scanner.skip_while(char::is_alphanumeric);
+    let (_, _c) = scanner.accept_if(|c| !c.is_whitespace())?;
+    let (_, _s) = scanner.skip_while(|c| !c.is_whitespace());
     Ok(())
 }
 
 fn parse_symbol(scanner: &mut Scanner) -> Result<Lval, Error> {
     let (_, s) = scanner.scan_with(scan_symbol).unwrap();
     Ok(Lval::Symbol(String::from(s)))
+}
+
+fn parse_sexp(scanner: &mut Scanner) -> Result<Lval, Error> {
+    let (_, _) = scanner.accept_if(is_open_paren).unwrap();
+    let mut vec: Vec<Lval> = Vec::new();
+    while let Ok((_, c)) = scanner.peek_nth(0) {
+        if is_closed_paren(c) {
+            break;
+        }
+
+        vec.push(parse_internal(scanner).unwrap());
+
+        scanner.skip_while(char::is_whitespace);
+    }
+    let (_, _) = scanner.accept_if(is_closed_paren).unwrap();
+
+    Ok(Lval::Sexp(vec))
 }
 
 #[cfg(test)]
@@ -143,6 +155,16 @@ fn assert_parse(exp: &Lval, s: &str) {
 #[test]
 fn it_parses_atoms() {
     assert_parse(&Lval::Symbol("val".into()), "val")
+}
+
+#[test]
+fn it_parses_atom_as_operators() {
+    assert_parse(&Lval::Symbol("+".into()), "+")
+}
+
+#[test]
+fn it_parses_atom_as_emoji() {
+    assert_parse(&Lval::Symbol("👻".into()), "👻")
 }
 
 #[test]
