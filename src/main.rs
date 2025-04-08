@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, Error, Write};
+use std::io::{self, Write};
 use std::vec::Vec;
 use text_scanner::{Scanner, ScannerItem};
 
@@ -15,7 +15,34 @@ enum Lval {
     Sexp(Vec<Lval>),
 }
 
-fn read() -> Result<Lval, Error> {
+#[derive(Debug)]
+enum ParseError {
+    ScannerError(String),
+    IoError(io::Error),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseError::ScannerError(s) => write!(f, "scanner error: {}", s),
+            ParseError::IoError(e) => write!(f, "io error: {}", e),
+        }
+    }
+}
+
+impl From<io::Error> for ParseError {
+    fn from(err: io::Error) -> ParseError {
+        ParseError::IoError(err)
+    }
+}
+
+impl From<String> for ParseError {
+    fn from(s: String) -> ParseError {
+        ParseError::ScannerError(s.into())
+    }
+}
+
+fn read() -> Result<Lval, ParseError> {
     let mut input = String::new();
     print!("> ");
     io::stdout().flush().unwrap();
@@ -23,23 +50,23 @@ fn read() -> Result<Lval, Error> {
     match io::stdin().read_line(&mut input) {
         Ok(0) => Ok(Lval::Symbol("quit".into())),
         Ok(_) => parse(input.trim()),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
-fn parse(s: &str) -> Result<Lval, Error> {
+fn parse(s: &str) -> Result<Lval, ParseError> {
     let mut scanner = Scanner::new(s);
 
     let r = parse_internal(&mut scanner);
 
     if scanner.has_remaining_text() {
-        panic!("has more text")
+        return Err(format!("has more text \"{}\"", scanner.remaining_text()).into());
     }
 
     r
 }
 
-fn parse_internal(scanner: &mut Scanner) -> Result<Lval, Error> {
+fn parse_internal(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     scanner.skip_while(char::is_whitespace);
     let (_, c) = scanner.peek_nth(0).unwrap();
     let r = if is_quote(c) {
@@ -88,7 +115,7 @@ fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
     Ok(())
 }
 
-fn parse_string(scanner: &mut Scanner) -> Result<Lval, Error> {
+fn parse_string(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     let (_, _) = scanner.accept_if(is_quote).unwrap();
     let (_, s) = scanner.scan_with(scan_string).unwrap();
     let (_, _) = scanner.accept_if(is_quote).unwrap();
@@ -110,7 +137,7 @@ fn scan_number<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
     Ok(())
 }
 
-fn parse_number(scanner: &mut Scanner) -> Result<Lval, Error> {
+fn parse_number(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     if let Ok((_, s)) = scanner.scan_with(scan_float) {
         Ok(Lval::Float(s.parse().unwrap()))
     } else {
@@ -125,12 +152,12 @@ fn scan_symbol<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
     Ok(())
 }
 
-fn parse_symbol(scanner: &mut Scanner) -> Result<Lval, Error> {
+fn parse_symbol(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     let (_, s) = scanner.scan_with(scan_symbol).unwrap();
     Ok(Lval::Symbol(String::from(s)))
 }
 
-fn parse_sexp(scanner: &mut Scanner) -> Result<Lval, Error> {
+fn parse_sexp(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     let (_, _) = scanner.accept_if(is_open_paren).unwrap();
     let mut vec: Vec<Lval> = Vec::new();
     while let Ok((_, c)) = scanner.peek_nth(0) {
