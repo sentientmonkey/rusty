@@ -51,10 +51,16 @@ impl From<&str> for ParseError {
     }
 }
 
+impl From<ScannerItem<&str>> for ParseError {
+    fn from(item: ScannerItem<&str>) -> ParseError {
+        ParseError::ScannerError(item.1.to_string())
+    }
+}
+
 fn read() -> Result<Lval, ParseError> {
     let mut input = String::new();
     print!("> ");
-    io::stdout().flush().unwrap();
+    io::stdout().flush()?;
 
     match io::stdin().read_line(&mut input) {
         Ok(0) => Ok(Lval::Symbol("quit".into())),
@@ -125,7 +131,7 @@ fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
 }
 
 fn parse_string(scanner: &mut Scanner) -> Result<Lval, ParseError> {
-    let (_, _) = scanner.accept_if(is_quote).unwrap();
+    let (_, _) = scanner.accept_if(is_quote)?;
     let (_, s) = scanner
         .scan_with(scan_string)
         .map_err(|(_, _)| "must be string")?;
@@ -154,7 +160,7 @@ fn parse_number(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     if let Ok((_, s)) = scanner.scan_with(scan_float) {
         Ok(Lval::Float(s.parse().unwrap()))
     } else {
-        let (_, s) = scanner.scan_with(scan_number).unwrap();
+        let (_, s) = scanner.scan_with(scan_number)?;
         Ok(Lval::Number(i32::from_str_radix(s, 10).unwrap()))
     }
 }
@@ -166,19 +172,19 @@ fn scan_symbol<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
 }
 
 fn parse_symbol(scanner: &mut Scanner) -> Result<Lval, ParseError> {
-    let (_, s) = scanner.scan_with(scan_symbol).unwrap();
+    let (_, s) = scanner.scan_with(scan_symbol)?;
     Ok(Lval::Symbol(String::from(s)))
 }
 
 fn parse_sexp(scanner: &mut Scanner) -> Result<Lval, ParseError> {
-    let (_, _) = scanner.accept_if(is_open_paren).unwrap();
+    let (_, _) = scanner.accept_if(is_open_paren)?;
     let mut vec: Vec<Lval> = Vec::new();
     while let Ok((_, c)) = scanner.peek_nth(0) {
         if is_closed_paren(c) {
             break;
         }
 
-        vec.push(parse_internal(scanner).unwrap());
+        vec.push(parse_internal(scanner)?);
 
         scanner.skip_while(char::is_whitespace);
     }
