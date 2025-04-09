@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt;
 use std::io::{self, Write};
 use std::vec::Vec;
@@ -21,6 +22,8 @@ enum ParseError {
     IoError(io::Error),
 }
 
+impl Error for ParseError {}
+
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -39,6 +42,12 @@ impl From<io::Error> for ParseError {
 impl From<String> for ParseError {
     fn from(s: String) -> ParseError {
         ParseError::ScannerError(s.into())
+    }
+}
+
+impl From<&str> for ParseError {
+    fn from(s: &str) -> ParseError {
+        ParseError::ScannerError(s.to_string())
     }
 }
 
@@ -68,7 +77,7 @@ fn parse(s: &str) -> Result<Lval, ParseError> {
 
 fn parse_internal(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     scanner.skip_while(char::is_whitespace);
-    let (_, c) = scanner.peek_nth(0).unwrap();
+    let (_, c) = scanner.peek_nth(0).map_err(|(_, _)| "out of bounds")?;
     let r = if is_quote(c) {
         parse_string(scanner)
     } else if is_open_paren(c) {
@@ -117,8 +126,12 @@ fn scan_string<'text>(scanner: &mut Scanner<'text>) -> Result<(), ScannerItem<&'
 
 fn parse_string(scanner: &mut Scanner) -> Result<Lval, ParseError> {
     let (_, _) = scanner.accept_if(is_quote).unwrap();
-    let (_, s) = scanner.scan_with(scan_string).unwrap();
-    let (_, _) = scanner.accept_if(is_quote).unwrap();
+    let (_, s) = scanner
+        .scan_with(scan_string)
+        .map_err(|(_, _)| "must be string")?;
+    let (_, _) = scanner
+        .accept_if(is_quote)
+        .map_err(|(_, _)| "missing closing quote")?;
     Ok(Lval::String(String::from(s)))
 }
 
@@ -169,7 +182,9 @@ fn parse_sexp(scanner: &mut Scanner) -> Result<Lval, ParseError> {
 
         scanner.skip_while(char::is_whitespace);
     }
-    let (_, _) = scanner.accept_if(is_closed_paren).unwrap();
+    let (_, _) = scanner
+        .accept_if(is_closed_paren)
+        .map_err(|(_, _)| "missing closing paren")?;
 
     Ok(Lval::Sexp(vec))
 }
@@ -177,6 +192,13 @@ fn parse_sexp(scanner: &mut Scanner) -> Result<Lval, ParseError> {
 #[cfg(test)]
 fn assert_parse(exp: &Lval, s: &str) {
     assert_eq!(exp, &parse(s).unwrap())
+}
+
+#[cfg(test)]
+fn assert_parse_err(s: &str, e: &str) {
+    let r = parse(s);
+    assert!(r.is_err());
+    assert_eq!(r.unwrap_err().to_string(), e)
 }
 
 #[test]
@@ -227,6 +249,27 @@ fn it_parses_sexps() {
         "(println \"foo\")",
     );
 }
+
+#[test]
+fn it_returns_error_on_unclosed_paren() {
+    assert_parse_err("(+ 1 2", "scanner error: missing closing paren")
+}
+
+#[test]
+fn it_returns_error_on_more_text() {
+    assert_parse_err("15a", "scanner error: has more text \"a\"")
+}
+
+#[test]
+fn it_returns_error_on_missing_quote() {
+    assert_parse_err("\"foo", "scanner error: missing closing quote")
+}
+
+#[test]
+fn it_returns_error_on_empty_string() {
+    assert_parse_err("", "scanner error: out of bounds")
+}
+
 #[test]
 fn it_parsers_recusively() {
     assert_parse(
